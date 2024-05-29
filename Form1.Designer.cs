@@ -20,81 +20,144 @@
 
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             SourceDirectory = new TextBox();
             BrowseSource = new Button();
             DestinationDirectory = new TextBox();
             BrowseDestination = new Button();
             Extract = new Button();
-            progressBar1 = new ProgressBar();
+            Exit = new Button();
+            pictureBox1 = new PictureBox();
+            lblStatus = new Label();
+            lblValid = new Label();
+            lblCurrentFile = new Label();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             SuspendLayout();
             // 
             // SourceDirectory
             // 
-            SourceDirectory.Location = new Point(209, 91);
+            SourceDirectory.Location = new Point(253, 12);
             SourceDirectory.Name = "SourceDirectory";
             SourceDirectory.Size = new Size(260, 23);
             SourceDirectory.TabIndex = 0;
+            SourceDirectory.Text = "C:\\Windows\\System32\\DriverStore\\FileRepository";
             // 
             // BrowseSource
             // 
-            BrowseSource.Location = new Point(128, 88);
+            BrowseSource.Location = new Point(172, 11);
             BrowseSource.Name = "BrowseSource";
             BrowseSource.Size = new Size(75, 23);
             BrowseSource.TabIndex = 1;
-            BrowseSource.Text = "Browse...";
+            BrowseSource.Text = "Source";
             BrowseSource.UseVisualStyleBackColor = true;
             BrowseSource.Click += btnBrowseSource_Click;
             // 
             // DestinationDirectory
             // 
-            DestinationDirectory.Location = new Point(209, 117);
+            DestinationDirectory.Location = new Point(253, 40);
             DestinationDirectory.Name = "DestinationDirectory";
             DestinationDirectory.Size = new Size(260, 23);
             DestinationDirectory.TabIndex = 2;
             // 
             // BrowseDestination
             // 
-            BrowseDestination.Location = new Point(128, 117);
+            BrowseDestination.Location = new Point(172, 40);
             BrowseDestination.Name = "BrowseDestination";
             BrowseDestination.Size = new Size(75, 23);
             BrowseDestination.TabIndex = 3;
-            BrowseDestination.Text = "Browse...";
+            BrowseDestination.Text = "Destination";
             BrowseDestination.UseVisualStyleBackColor = true;
             BrowseDestination.Click += btnBrowseDestination_Click;
             // 
             // Extract
             // 
-            Extract.Location = new Point(264, 179);
+            Extract.Location = new Point(519, 25);
             Extract.Name = "Extract";
-            Extract.Size = new Size(122, 23);
+            Extract.Size = new Size(65, 23);
             Extract.TabIndex = 4;
-            Extract.Text = "Extract";
+            Extract.Text = "Create";
             Extract.UseVisualStyleBackColor = true;
             Extract.Click += btnExtract_Click;
             // 
-            // progressBar1
+            // Exit
             // 
-            progressBar1.Location = new Point(128, 255);
-            progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(341, 23);
-            progressBar1.TabIndex = 5;
-            progressBar1.Visible = false;
+            Exit.Location = new Point(548, 197);
+            Exit.Name = "Exit";
+            Exit.Size = new Size(36, 23);
+            Exit.TabIndex = 8;
+            Exit.Text = "Exit";
+            Exit.UseVisualStyleBackColor = true;
+            Exit.Click += Exit_Click;
+            // 
+            // pictureBox1
+            // 
+            pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
+            pictureBox1.Location = new Point(12, 12);
+            pictureBox1.Name = "pictureBox1";
+            pictureBox1.Size = new Size(100, 179);
+            pictureBox1.SizeMode = PictureBoxSizeMode.StretchImage;
+            pictureBox1.TabIndex = 9;
+            pictureBox1.TabStop = false;
+            // 
+            // lblStatus
+            // 
+            lblStatus.AutoSize = true;
+            lblStatus.Font = new Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lblStatus.ForeColor = Color.Lime;
+            lblStatus.Location = new Point(205, 100);
+            lblStatus.Name = "lblStatus";
+            lblStatus.Size = new Size(13, 20);
+            lblStatus.TabIndex = 10;
+            lblStatus.Text = " ";
+            // 
+            // lblValid
+            // 
+            lblValid.AutoSize = true;
+            lblValid.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            lblValid.ForeColor = Color.Red;
+            lblValid.Location = new Point(253, 66);
+            lblValid.Name = "lblValid";
+            lblValid.Size = new Size(17, 25);
+            lblValid.TabIndex = 11;
+            lblValid.Text = " ";
+            // 
+            // lblCurrentFile
+            // 
+            lblCurrentFile.AutoSize = true;
+            lblCurrentFile.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lblCurrentFile.ForeColor = Color.Yellow;
+            lblCurrentFile.Location = new Point(12, 199);
+            lblCurrentFile.Name = "lblCurrentFile";
+            lblCurrentFile.Size = new Size(12, 17);
+            lblCurrentFile.TabIndex = 12;
+            lblCurrentFile.Text = " ";
             // 
             // Form1
             // 
-            ClientSize = new Size(618, 336);
+            BackColor = SystemColors.ControlDarkDark;
+            ClientSize = new Size(595, 226);
+            Controls.Add(lblCurrentFile);
+            Controls.Add(lblValid);
+            Controls.Add(lblStatus);
+            Controls.Add(pictureBox1);
+            Controls.Add(Exit);
             Controls.Add(Extract);
             Controls.Add(BrowseDestination);
             Controls.Add(DestinationDirectory);
             Controls.Add(BrowseSource);
             Controls.Add(SourceDirectory);
-            Controls.Add(progressBar1);
+            FormBorderStyle = FormBorderStyle.FixedSingle;
             Name = "Form1";
             Text = "Driver Pack Creator";
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
 
-        private ProgressBar progressBar1;
+        private Button Exit;
+        private PictureBox pictureBox1;
+        private Label lblStatus;
+        private Label lblValid;
+        private Label lblCurrentFile;
     }
 }

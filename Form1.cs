@@ -1,9 +1,10 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using System.IO.Compression;
-
 
 namespace DriverPackCreator
 {
@@ -84,37 +85,38 @@ namespace DriverPackCreator
 
             if (Directory.Exists(sourceDirectory) && Directory.Exists(destinationDirectory))
             {
-                // Show the progress bar
-                progressBar1.Visible = true;
+                lblCurrentFile.Visible = true; // Show the current file label
 
                 // Start the extraction process in a background thread
                 BackgroundWorker worker = new BackgroundWorker();
                 worker.WorkerReportsProgress = true;
-                worker.DoWork += (sender, e) =>
+                worker.DoWork += (s, e) =>
                 {
                     ExtractAndOrganizeFiles(sourceDirectory, destinationDirectory, worker);
                 };
-                worker.ProgressChanged += (sender, e) =>
+                worker.ProgressChanged += (s, e) =>
                 {
-                    // Cap the progress value at 100 if it exceeds that value
-                    progressBar1.Value = Math.Min(e.ProgressPercentage, 100);
+                    // Update current file label
+                    if (e.UserState is string currentFile)
+                    {
+                        lblCurrentFile.Text = $"Current File: {currentFile}";
+                    }
                 };
-                worker.RunWorkerCompleted += (sender, e) =>
+                worker.RunWorkerCompleted += (s, e) =>
                 {
-                    progressBar1.Visible = false; // Hide the progress bar when extraction is complete
+                    lblCurrentFile.Visible = false; // Hide the current file label when extraction is complete
                     GenerateReadme(destinationDirectory);
-                    MessageBox.Show("Extraction and organization complete!");
+                    MoveFilesToReadyForDriverfinder(destinationDirectory);
+                    lblStatus.Text = "Extraction and organization complete!";
+                    OpenDestinationFolder(destinationDirectory);
                 };
                 worker.RunWorkerAsync();
             }
             else
             {
-                MessageBox.Show("Please select valid directories.");
+                lblValid.Text = "Please select valid directories.";
             }
         }
-
-
-
 
         private void ExtractAndOrganizeFiles(string sourceDirectory, string destinationDirectory, BackgroundWorker worker)
         {
@@ -149,7 +151,7 @@ namespace DriverPackCreator
                 // Report progress for file extraction
                 filesProcessed++;
                 int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
-                worker.ReportProgress(progressPercentage);
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file)); // Pass the current file name as UserState
             }
 
             // Create a ZIP file containing all the SCCM folders
@@ -167,10 +169,16 @@ namespace DriverPackCreator
                 foreach (var sccmFolder in sccmFolders)
                 {
                     AddFolderToZip(zipArchive, sccmFolder, worker, ref filesProcessed, totalZipFiles);
+
+                    // Create an individual zip for each folder
+                    string individualZipFilePath = Path.Combine(destinationDirectory, $"{Path.GetFileName(sccmFolder)}.zip");
+                    using (var individualZipArchive = ZipFile.Open(individualZipFilePath, ZipArchiveMode.Create))
+                    {
+                        AddFolderToZip(individualZipArchive, sccmFolder, worker, ref filesProcessed, totalZipFiles);
+                    }
                 }
             }
         }
-
 
         private void AddFolderToZip(ZipArchive zipArchive, string folderPath, BackgroundWorker worker, ref int filesProcessed, int totalFiles)
         {
@@ -188,7 +196,7 @@ namespace DriverPackCreator
                 // Report progress for ZIP file creation
                 filesProcessed++;
                 int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
-                worker.ReportProgress(progressPercentage);
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file)); // Pass the current file name as UserState
             }
 
             // Recursively add subfolders
@@ -198,7 +206,36 @@ namespace DriverPackCreator
             }
         }
 
+        private void MoveFilesToReadyForDriverfinder(string destinationDirectory)
+        {
+            string readyFolder = Path.Combine(destinationDirectory, "ReadyForDriverfinder");
 
+            // Create the ReadyForDriverfinder directory if it doesn't exist
+            if (!Directory.Exists(readyFolder))
+            {
+                Directory.CreateDirectory(readyFolder);
+            }
 
+            // Move all .zip and .txt files to the ReadyForDriverfinder directory
+            var filesToMove = Directory.GetFiles(destinationDirectory, "*.*", SearchOption.TopDirectoryOnly)
+                                       .Where(file => file.EndsWith(".zip") || file.EndsWith(".txt"));
+
+            foreach (var file in filesToMove)
+            {
+                string destinationFilePath = Path.Combine(readyFolder, Path.GetFileName(file));
+                File.Move(file, destinationFilePath);
+            }
+        }
+
+        private void OpenDestinationFolder(string destinationDirectory)
+        {
+            // Open the destination directory in a new file explorer window
+            Process.Start("explorer.exe", destinationDirectory);
+        }
+
+        private void Exit_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
     }
 }
