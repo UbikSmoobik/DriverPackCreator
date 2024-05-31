@@ -39,90 +39,150 @@ namespace DriverPackCreator
 
         private void GenerateReadme(string destinationDirectory)
         {
-            string readmeFilePath = Path.Combine(destinationDirectory, "readme.txt");
-
-            using (StreamWriter writer = new StreamWriter(readmeFilePath))
-            {
-                // Write header
-                writer.WriteLine("Stone Driver Package");
-                writer.WriteLine("__________________________________________________________________________________________________________");
-                writer.WriteLine();
-                writer.WriteLine("Package type:\t\tSCCM driver package");
-                writer.WriteLine("Date:\t\t\t" + DateTime.Today.ToString("dd/MM/yyyy"));
-                writer.WriteLine("__________________________________________________________________________________________________________");
-                writer.WriteLine();
-                writer.WriteLine("Intended use:");
-                writer.WriteLine();
-                writer.WriteLine("This driver package provides the base drivers.");
-                writer.WriteLine("System administrators can utilise this to deploy Windows images with Microsoft System Center Configuration Manager");
-                writer.WriteLine("(SCCM) by importing the device driver package into their SCCM environment.");
-                writer.WriteLine("__________________________________________________________________________________________________________");
-                writer.WriteLine();
-
-                // Write driver file details
-                foreach (var file in Directory.GetFiles(destinationDirectory, "*.*", SearchOption.AllDirectories))
-                {
-                    string relativePath = Path.GetRelativePath(destinationDirectory, file);
-                    writer.WriteLine("FileName: " + relativePath);
-                    // Extract and display additional information if needed (e.g., Class, Provider, Driver Date, Driver Ver)
-                }
-
-                // Write limitations
-                writer.WriteLine();
-                writer.WriteLine("LIMITATIONS");
-                writer.WriteLine();
-                writer.WriteLine("* Nvidia and ATI drivers are not included in this package because they are not compatible with this method of deployment.");
-                writer.WriteLine("  Administrators will need to create a package that performs a silent install using the executable file and");
-                writer.WriteLine("  add it to the task sequence separately.");
-                writer.WriteLine("__________________________________________________________________________________________________________");
-            }
+            string readmeFilePath = Path.Combine(destinationDirectory, "README.txt");
+            string readmeContent = "This folder contains SCCM driver packs extracted using DriverPackCreator.";
+            File.WriteAllText(readmeFilePath, readmeContent);
         }
 
         private void btnExtract_Click(object sender, EventArgs e)
         {
+            lblValid.Text = " ";
+
             string sourceDirectory = SourceDirectory.Text;
             string destinationDirectory = DestinationDirectory.Text;
 
-            if (Directory.Exists(sourceDirectory) && Directory.Exists(destinationDirectory))
+            if (!IsValidDirectory(destinationDirectory))
             {
-                lblCurrentFile.Visible = true; // Show the current file label
+                lblValid.Text = "Please select a valid destination directory.";
+                return;
+            }
 
-                // Start the extraction process in a background thread
+            lblCurrentFile.Visible = true;
+
+            if (radExtractFromSystem.Checked)
+            {
+                if (!string.IsNullOrEmpty(destinationDirectory))
+                {
+                    lblCurrentFile.Text = "Running DISM...";
+
+                    BackgroundWorker dismWorker = new BackgroundWorker();
+                    dismWorker.WorkerReportsProgress = true;
+                    dismWorker.DoWork += (s, args) =>
+                    {
+                        ExtractDriversFromSystem(destinationDirectory, dismWorker);
+                    };
+                    dismWorker.RunWorkerCompleted += (s, args) =>
+                    {
+                        lblCurrentFile.Visible = false;
+                        GenerateReadme(destinationDirectory);
+                        MoveDriverPackZip(destinationDirectory);
+                        MoveFilesToReadyForDriverfinder(destinationDirectory);
+                        DeleteSCCMFolders(destinationDirectory);
+                        lblStatus.Text = "Extraction and organization complete!";
+                        OpenDestinationFolder(destinationDirectory);
+                    };
+                    dismWorker.RunWorkerAsync();
+                }
+                else
+                {
+                    lblValid.Text = "Please select a destination directory.";
+                    return;
+                }
+            }
+            else
+            {
+                if (!IsValidDirectory(sourceDirectory))
+                {
+                    lblValid.Text = "Please select a valid source directory.";
+                    return;
+                }
+
                 BackgroundWorker worker = new BackgroundWorker();
                 worker.WorkerReportsProgress = true;
-                worker.DoWork += (s, e) =>
+                worker.DoWork += (s, args) =>
                 {
                     ExtractAndOrganizeFiles(sourceDirectory, destinationDirectory, worker);
                 };
-                worker.ProgressChanged += (s, e) =>
+                worker.ProgressChanged += (s, args) =>
                 {
-                    // Update current file label
-                    if (e.UserState is string currentFile)
+                    if (args.UserState is string currentFile)
                     {
                         lblCurrentFile.Text = $"Current File: {currentFile}";
                     }
                 };
-                worker.RunWorkerCompleted += (s, e) =>
+                worker.RunWorkerCompleted += (s, args) =>
                 {
-                    lblCurrentFile.Visible = false; // Hide the current file label when extraction is complete
+                    lblCurrentFile.Visible = false;
                     GenerateReadme(destinationDirectory);
+                    MoveDriverPackZip(destinationDirectory);
                     MoveFilesToReadyForDriverfinder(destinationDirectory);
+                    DeleteSCCMFolders(destinationDirectory);
                     lblStatus.Text = "Extraction and organization complete!";
                     OpenDestinationFolder(destinationDirectory);
                 };
                 worker.RunWorkerAsync();
             }
+        }
+
+        private bool IsValidDirectory(string directoryPath)
+        {
+            return !string.IsNullOrEmpty(directoryPath) && Directory.Exists(directoryPath);
+        }
+
+        private void ExtractDriversFromSystem(string destinationDirectory, BackgroundWorker dismWorker)
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = "dism.exe",
+                Arguments = $"/Online /Export-Driver /Destination:\"{destinationDirectory}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+
+            using (Process process = new Process { StartInfo = startInfo })
+            {
+                process.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data) && !e.Data.Contains("Version"))
+                    {
+                        Invoke((Action)(() =>
+                        {
+                            lblCurrentFile.Text = e.Data;
+                        }));
+                    }
+                };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.WaitForExit();
+                DismOrganizeFiles(destinationDirectory, dismWorker);
+            }
+
+            lblCurrentFile.Invoke((MethodInvoker)delegate {
+                lblCurrentFile.Text = " ";
+            });
+        }
+
+        private void radExtractFromSystem_CheckedChanged(object sender, EventArgs e)
+        {
+            if (radExtractFromSystem.Checked)
+            {
+                SourceDirectory.Enabled = false;
+                SourceDirectory.Text = string.Empty;
+                BrowseSource.Enabled = false;
+            }
             else
             {
-                lblValid.Text = "Please select valid directories.";
+                SourceDirectory.Enabled = true;
+                BrowseSource.Enabled = true;
             }
         }
 
         private void ExtractAndOrganizeFiles(string sourceDirectory, string destinationDirectory, BackgroundWorker worker)
         {
-            string[] fileExtensions = { ".inf", ".cat", ".dat", ".sys" };
+            string[] fileExtensions = { ".inf", ".cat", ".dat", ".sys", ".cab" };
 
-            // Get all files with specified extensions from source directory and subdirectories
             var files = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories)
                                  .Where(file => fileExtensions.Contains(Path.GetExtension(file).ToLower()));
 
@@ -131,50 +191,130 @@ namespace DriverPackCreator
 
             foreach (var file in files)
             {
-                // Get the directory name where the file is located
                 string parentDirectory = Path.GetFileName(Path.GetDirectoryName(file));
-
-                // Create new directory name prefixed with "SCCM"
                 string newDirectoryName = $"SCCM_{parentDirectory}";
                 string newDirectoryPath = Path.Combine(destinationDirectory, newDirectoryName);
 
-                // Create the new directory if it doesn't exist
                 if (!Directory.Exists(newDirectoryPath))
                 {
                     Directory.CreateDirectory(newDirectoryPath);
                 }
 
-                // Copy the file to the new directory
                 string newFilePath = Path.Combine(newDirectoryPath, Path.GetFileName(file));
                 File.Copy(file, newFilePath, true);
 
-                // Report progress for file extraction
                 filesProcessed++;
                 int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
-                worker.ReportProgress(progressPercentage, Path.GetFileName(file)); // Pass the current file name as UserState
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file));
+
+                lblCurrentFile.Invoke((MethodInvoker)delegate {
+                    lblCurrentFile.Text = $"Preparing folder for driver pack: {newDirectoryName}";
+                });
             }
 
-            // Create a ZIP file containing all the SCCM folders
             string zipFilePath = Path.Combine(destinationDirectory, "DriverPack.Zip");
-
-            // Count the total number of files in all SCCM folders for progress estimation
-            int totalZipFiles = Directory.GetFiles(destinationDirectory, "*.*", SearchOption.AllDirectories)
-                                         .Where(file => !file.StartsWith(zipFilePath)) // Exclude the ZIP file itself
-                                         .Count();
-
-            using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+            if (!File.Exists(zipFilePath))
             {
-                // Add each SCCM folder and its contents to the ZIP archive
-                var sccmFolders = Directory.GetDirectories(destinationDirectory, "SCCM_*", SearchOption.TopDirectoryOnly);
-                foreach (var sccmFolder in sccmFolders)
+                using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
                 {
-                    AddFolderToZip(zipArchive, sccmFolder, worker, ref filesProcessed, totalZipFiles);
-
-                    // Create an individual zip for each folder
-                    string individualZipFilePath = Path.Combine(destinationDirectory, $"{Path.GetFileName(sccmFolder)}.zip");
-                    using (var individualZipArchive = ZipFile.Open(individualZipFilePath, ZipArchiveMode.Create))
+                    var sccmFolders = Directory.GetDirectories(destinationDirectory, "SCCM_*", SearchOption.TopDirectoryOnly);
+                    foreach (var sccmFolder in sccmFolders)
                     {
-                        AddFolderToZip(individualZipArchive, sccmFolder, worker, ref filesProcessed, totalZipFiles);
+                        AddSCCMFoldersToZip(zipArchive, sccmFolder, worker, ref filesProcessed, totalFiles);
+                    }
+                }
+            }
+
+            var sourceFolders = Directory.GetDirectories(sourceDirectory);
+            foreach (var folder in sourceFolders)
+            {
+                string individualZipFilePath = Path.Combine(destinationDirectory, $"{Path.GetFileName(folder)}.zip");
+                using (var individualZipArchive = ZipFile.Open(individualZipFilePath, ZipArchiveMode.Create))
+                {
+                    AddFolderContentsToZip(individualZipArchive, folder, worker, ref filesProcessed, totalFiles);
+                }
+            }
+        }
+
+        private void AddSCCMFoldersToZip(ZipArchive zipArchive, string folderPath, BackgroundWorker worker, ref int filesProcessed, int totalFiles)
+        {
+            string folderName = Path.GetFileName(folderPath);
+            ZipArchiveEntry folderEntry = zipArchive.CreateEntry(folderName + "/");
+
+            foreach (string file in Directory.GetFiles(folderPath))
+            {
+                lblCurrentFile.Invoke((MethodInvoker)delegate
+                {
+                    lblCurrentFile.Text = $"Adding folder to Driver Pack: {folderPath}";
+                });
+
+                string relativePath = Path.Combine(folderName, Path.GetFileName(file));
+                zipArchive.CreateEntryFromFile(file, relativePath);
+
+                filesProcessed++;
+                int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file));
+            }
+        }
+
+        private void AddFolderContentsToZip(ZipArchive zipArchive, string folderPath, BackgroundWorker worker, ref int filesProcessed, int totalFiles)
+        {
+            foreach (string file in Directory.GetFiles(folderPath))
+            {
+                string relativePath = Path.GetFileName(file);
+                zipArchive.CreateEntryFromFile(file, relativePath);
+
+                filesProcessed++;
+                int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file));
+            }
+
+            foreach (string subfolder in Directory.GetDirectories(folderPath))
+            {
+                AddFolderContentsToZip(zipArchive, subfolder, worker, ref filesProcessed, totalFiles);
+            }
+        }
+
+        private void DismOrganizeFiles(string destinationDirectory, BackgroundWorker dismWorker)
+        {
+            var files = Directory.GetFiles(destinationDirectory, "*.*", SearchOption.AllDirectories)
+                                 .Where(file => !file.EndsWith("DriverPack.Zip"));
+
+            int totalFiles = files.Count();
+            int filesProcessed = 0;
+
+            foreach (var file in files)
+            {
+                string parentDirectory = Path.GetFileName(Path.GetDirectoryName(file));
+                string newDirectoryName = $"SCCM_{parentDirectory}";
+                string newDirectoryPath = Path.Combine(destinationDirectory, newDirectoryName);
+
+                if (!Directory.Exists(newDirectoryPath))
+                {
+                    Directory.CreateDirectory(newDirectoryPath);
+                }
+
+                string newFilePath = Path.Combine(newDirectoryPath, Path.GetFileName(file));
+                File.Copy(file, newFilePath, true);
+
+                filesProcessed++;
+                int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
+                dismWorker.ReportProgress(progressPercentage, Path.GetFileName(file));
+
+                lblCurrentFile.Invoke((MethodInvoker)delegate {
+                    lblCurrentFile.Text = $"Preparing folder for driver pack: {newDirectoryName}";
+                });
+            }
+
+            string zipFilePath = Path.Combine(destinationDirectory, "DriverPack.Zip");
+            if (!File.Exists(zipFilePath))
+            {
+                using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                {
+                    var sccmFolders = Directory.GetDirectories(destinationDirectory, "SCCM_*", SearchOption.TopDirectoryOnly);
+                    foreach (var sccmFolder in sccmFolders)
+                    {
+                        AddFolderToZip(zipArchive, sccmFolder, dismWorker, ref filesProcessed, totalFiles);
                     }
                 }
             }
@@ -183,26 +323,42 @@ namespace DriverPackCreator
         private void AddFolderToZip(ZipArchive zipArchive, string folderPath, BackgroundWorker worker, ref int filesProcessed, int totalFiles)
         {
             string folderName = Path.GetFileName(folderPath);
-
-            // Create an entry for the folder
             ZipArchiveEntry folderEntry = zipArchive.CreateEntry(folderName + "/");
 
-            // Add files from the folder to the archive
             foreach (string file in Directory.GetFiles(folderPath))
             {
+                lblCurrentFile.Invoke((MethodInvoker)delegate {
+                    lblCurrentFile.Text = $"Adding folder to Driver Pack: {folderPath}";
+                });
+
                 string relativePath = Path.Combine(folderName, Path.GetFileName(file));
                 zipArchive.CreateEntryFromFile(file, relativePath);
 
-                // Report progress for ZIP file creation
                 filesProcessed++;
                 int progressPercentage = (int)((float)filesProcessed / totalFiles * 100);
-                worker.ReportProgress(progressPercentage, Path.GetFileName(file)); // Pass the current file name as UserState
+                worker.ReportProgress(progressPercentage, Path.GetFileName(file));
             }
 
-            // Recursively add subfolders
             foreach (string subfolder in Directory.GetDirectories(folderPath))
             {
                 AddFolderToZip(zipArchive, subfolder, worker, ref filesProcessed, totalFiles);
+            }
+        }
+
+        private void MoveDriverPackZip(string destinationDirectory)
+        {
+            string readyFolder = Path.Combine(destinationDirectory, "ReadyForDriverfinder");
+
+            if (!Directory.Exists(readyFolder))
+            {
+                Directory.CreateDirectory(readyFolder);
+            }
+
+            string zipFilePath = Path.Combine(destinationDirectory, "DriverPack.Zip");
+            if (File.Exists(zipFilePath))
+            {
+                string destinationFilePath = Path.Combine(readyFolder, "DriverPack.Zip");
+                File.Move(zipFilePath, destinationFilePath);
             }
         }
 
@@ -210,13 +366,11 @@ namespace DriverPackCreator
         {
             string readyFolder = Path.Combine(destinationDirectory, "ReadyForDriverfinder");
 
-            // Create the ReadyForDriverfinder directory if it doesn't exist
             if (!Directory.Exists(readyFolder))
             {
                 Directory.CreateDirectory(readyFolder);
             }
 
-            // Move all .zip and .txt files to the ReadyForDriverfinder directory
             var filesToMove = Directory.GetFiles(destinationDirectory, "*.*", SearchOption.TopDirectoryOnly)
                                        .Where(file => file.EndsWith(".zip") || file.EndsWith(".txt"));
 
@@ -225,11 +379,25 @@ namespace DriverPackCreator
                 string destinationFilePath = Path.Combine(readyFolder, Path.GetFileName(file));
                 File.Move(file, destinationFilePath);
             }
+
+            // Check if DriverPack.zip was moved successfully
+            if (!File.Exists(Path.Combine(readyFolder, "DriverPack.Zip")))
+            {
+                MessageBox.Show("DriverPack.Zip was not moved to the ReadyForDriverfinder folder.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void DeleteSCCMFolders(string destinationDirectory)
+        {
+            var sccmFolders = Directory.GetDirectories(destinationDirectory, "SCCM_*", SearchOption.TopDirectoryOnly);
+            foreach (var folder in sccmFolders)
+            {
+                Directory.Delete(folder, true);
+            }
         }
 
         private void OpenDestinationFolder(string destinationDirectory)
         {
-            // Open the destination directory in a new file explorer window
             Process.Start("explorer.exe", destinationDirectory);
         }
 

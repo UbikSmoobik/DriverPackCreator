@@ -31,6 +31,7 @@
             lblStatus = new Label();
             lblValid = new Label();
             lblCurrentFile = new Label();
+            radExtractFromSystem = new RadioButton();
             ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             SuspendLayout();
             // 
@@ -54,14 +55,14 @@
             // 
             // DestinationDirectory
             // 
-            DestinationDirectory.Location = new Point(253, 40);
+            DestinationDirectory.Location = new Point(253, 64);
             DestinationDirectory.Name = "DestinationDirectory";
             DestinationDirectory.Size = new Size(260, 23);
             DestinationDirectory.TabIndex = 2;
             // 
             // BrowseDestination
             // 
-            BrowseDestination.Location = new Point(172, 40);
+            BrowseDestination.Location = new Point(172, 64);
             BrowseDestination.Name = "BrowseDestination";
             BrowseDestination.Size = new Size(75, 23);
             BrowseDestination.TabIndex = 3;
@@ -71,7 +72,7 @@
             // 
             // Extract
             // 
-            Extract.Location = new Point(519, 25);
+            Extract.Location = new Point(519, 35);
             Extract.Name = "Extract";
             Extract.Size = new Size(65, 23);
             Extract.TabIndex = 4;
@@ -81,7 +82,7 @@
             // 
             // Exit
             // 
-            Exit.Location = new Point(548, 197);
+            Exit.Location = new Point(548, 168);
             Exit.Name = "Exit";
             Exit.Size = new Size(36, 23);
             Exit.TabIndex = 8;
@@ -104,7 +105,7 @@
             lblStatus.AutoSize = true;
             lblStatus.Font = new Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, 0);
             lblStatus.ForeColor = Color.Lime;
-            lblStatus.Location = new Point(205, 100);
+            lblStatus.Location = new Point(172, 138);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(13, 20);
             lblStatus.TabIndex = 10;
@@ -115,7 +116,7 @@
             lblValid.AutoSize = true;
             lblValid.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
             lblValid.ForeColor = Color.Red;
-            lblValid.Location = new Point(253, 66);
+            lblValid.Location = new Point(159, 113);
             lblValid.Name = "lblValid";
             lblValid.Size = new Size(17, 25);
             lblValid.TabIndex = 11;
@@ -132,10 +133,23 @@
             lblCurrentFile.TabIndex = 12;
             lblCurrentFile.Text = " ";
             // 
+            // radExtractFromSystem
+            // 
+            radExtractFromSystem.AutoSize = true;
+            radExtractFromSystem.Location = new Point(173, 39);
+            radExtractFromSystem.Name = "radExtractFromSystem";
+            radExtractFromSystem.Size = new Size(168, 19);
+            radExtractFromSystem.TabIndex = 13;
+            radExtractFromSystem.TabStop = true;
+            radExtractFromSystem.Text = "Extract drivers from system";
+            radExtractFromSystem.UseVisualStyleBackColor = true;
+            radExtractFromSystem.CheckedChanged += radExtractFromSystem_CheckedChanged;
+            // 
             // Form1
             // 
             BackColor = SystemColors.ControlDarkDark;
             ClientSize = new Size(595, 226);
+            Controls.Add(radExtractFromSystem);
             Controls.Add(lblCurrentFile);
             Controls.Add(lblValid);
             Controls.Add(lblStatus);
@@ -159,5 +173,6 @@
         private Label lblStatus;
         private Label lblValid;
         private Label lblCurrentFile;
+        private RadioButton radExtractFromSystem;
     }
 }
