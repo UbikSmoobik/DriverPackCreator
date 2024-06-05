@@ -5,9 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace DriverPackCreator
 {
+
+
     public partial class Form1 : Form
     {
         public Form1()
@@ -15,8 +19,138 @@ namespace DriverPackCreator
             InitializeComponent();
         }
 
-        private void btnBrowseSource_Click(object sender, EventArgs e)
+
+        public class DriverInfoExtractor
         {
+            private const int MAX_PATH = 260;
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            public static extern IntPtr SetupOpenInfFile(
+                string FileName,
+                string InfClass,
+                uint InfStyle,
+                out uint ErrorLine
+            );
+
+            [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+            public static extern bool SetupGetStringField(
+                ref INFCONTEXT Context,
+                uint FieldIndex,
+                StringBuilder ReturnBuffer,
+                int ReturnBufferSize,
+                out uint RequiredSize
+            );
+
+            [DllImport("setupapi.dll", SetLastError = true)]
+            public static extern bool SetupFindFirstLine(
+                IntPtr InfHandle,
+                string Section,
+                string Key,
+                ref INFCONTEXT Context
+            );
+
+            [DllImport("setupapi.dll", SetLastError = true)]
+            public static extern void SetupCloseInfFile(IntPtr InfHandle);
+
+            [StructLayout(LayoutKind.Sequential)]
+            public struct INFCONTEXT
+            {
+                public IntPtr Inf;
+                public IntPtr CurrentInf;
+                public uint Section;
+                public uint Line;
+            }
+
+            public static string GetDriverInfo(string infFilePath, string section, string key)
+            {
+                IntPtr hInf = SetupOpenInfFile(infFilePath, null, 0, out uint errorLine);
+                if (hInf == IntPtr.Zero)
+                {
+                    throw new Exception("Failed to open INF file.");
+                }
+
+                try
+                {
+                    INFCONTEXT context = new INFCONTEXT();
+                    if (SetupFindFirstLine(hInf, section, key, ref context))
+                    {
+                        StringBuilder sb = new StringBuilder(MAX_PATH);
+                        if (SetupGetStringField(ref context, 1, sb, sb.Capacity, out uint requiredSize))
+                        {
+                            return sb.ToString();
+                        }
+                    }
+                    return null;
+                }
+                finally
+                {
+                    SetupCloseInfFile(hInf);
+                }
+            }
+
+            public static string ExtractInfComments(string infFilePath)
+            {
+                try
+                {
+                    var comments = new StringBuilder();
+                    bool inCommentBlock = false;
+                    bool skipDisclaimer = false;
+
+                    foreach (var line in File.ReadLines(infFilePath))
+                    {
+                        string trimmedLine = line.TrimStart();
+                        if (trimmedLine.StartsWith(";"))
+                        {
+                            if (trimmedLine.Contains("INTEL MAKES NO WARRANTY"))
+                            {
+                                skipDisclaimer = true;
+                            }
+
+                            if (skipDisclaimer && string.IsNullOrWhiteSpace(trimmedLine.TrimStart(';')))
+                            {
+                                skipDisclaimer = false;
+                            }
+
+                            if (!skipDisclaimer)
+                            {
+                                if (trimmedLine.Contains("Copyright") || trimmedLine.Contains("Filename") ||
+                                    trimmedLine.Contains("Revision") || trimmedLine.Contains("Abstract") ||
+                                    trimmedLine.Contains("Installs") || trimmedLine.Contains("**********************************************************************************************"))
+                                {
+                                    inCommentBlock = true;
+                                    comments.AppendLine(trimmedLine.TrimStart(';').Trim());
+                                }
+                                else if (inCommentBlock)
+                                {
+                                    comments.AppendLine(trimmedLine.TrimStart(';').Trim());
+                                }
+                            }
+                        }
+                        else if (inCommentBlock)
+                        {
+                            break;
+                        }
+                    }
+
+                    return comments.ToString();
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Failed to read INF file comments.", ex);
+                }
+            }
+        }
+
+
+
+
+            private void btnBrowseSource_Click(object sender, EventArgs e)
+        {
+            lblStatus.Invoke((MethodInvoker)delegate {
+                lblStatus.Text = " ";
+            });
+
+
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
                 if (fbd.ShowDialog() == DialogResult.OK)
@@ -28,6 +162,9 @@ namespace DriverPackCreator
 
         private void btnBrowseDestination_Click(object sender, EventArgs e)
         {
+            lblStatus.Invoke((MethodInvoker)delegate {
+                lblStatus.Text = " ";
+            });
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
                 if (fbd.ShowDialog() == DialogResult.OK)
@@ -37,15 +174,82 @@ namespace DriverPackCreator
             }
         }
 
-        private void GenerateReadme(string destinationDirectory)
-        {
-            string readmeFilePath = Path.Combine(destinationDirectory, "README.txt");
-            string readmeContent = "This folder contains SCCM driver packs extracted using DriverPackCreator.";
-            File.WriteAllText(readmeFilePath, readmeContent);
-        }
 
-        private void btnExtract_Click(object sender, EventArgs e)
+
+        public void GenerateReadme(string destinationDirectory)
         {
+            string readmeFilePath = Path.Combine(destinationDirectory, "readme.txt");
+
+            using (StreamWriter writer = new StreamWriter(readmeFilePath))
+            {
+                // Write header
+                writer.WriteLine("Stone Driver Package");
+                writer.WriteLine("__________________________________________________________________________________________________________");
+                writer.WriteLine();
+                writer.WriteLine("Package type:\t\tSCCM driver package");
+                writer.WriteLine("Created Date:\t\t\t" + DateTime.Today.ToString("dd/MM/yyyy"));
+                writer.WriteLine("__________________________________________________________________________________________________________");
+                writer.WriteLine();
+                writer.WriteLine("Intended use:");
+                writer.WriteLine();
+                writer.WriteLine("This driver package provides the base drivers.");
+                writer.WriteLine("System administrators can utilise this to deploy Windows images with Microsoft System Center Configuration Manager");
+                writer.WriteLine("(SCCM) by importing the device driver package into their SCCM environment.");
+                writer.WriteLine("__________________________________________________________________________________________________________");
+                writer.WriteLine();
+
+                // Write driver file details
+                foreach (var file in Directory.GetFiles(destinationDirectory, "*.*", SearchOption.AllDirectories))
+                {
+                    string relativePath = Path.GetRelativePath(destinationDirectory, file);
+                    writer.WriteLine("FileName: " + relativePath);
+
+                    if (Path.GetExtension(file).Equals(".inf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            string provider = DriverInfoExtractor.GetDriverInfo(file, "Version", "Provider");
+                            string driverDate = DriverInfoExtractor.GetDriverInfo(file, "Version", "DriverVer");
+                            string className = DriverInfoExtractor.GetDriverInfo(file, "Version", "Class");
+                            string comments = DriverInfoExtractor.ExtractInfComments(file);
+
+                         
+                            writer.WriteLine("  Comments:");
+                            writer.WriteLine(comments);
+                        }
+                        catch (Exception ex)
+                        {
+                            writer.WriteLine("  Error reading INF file: " + ex.Message);
+                        }
+                    }
+                }
+
+                // Write limitations
+                writer.WriteLine();
+                writer.WriteLine("LIMITATIONS");
+                writer.WriteLine();
+                writer.WriteLine("* Nvidia and ATI drivers are not included in this package because they are not compatible with this method of deployment.");
+                writer.WriteLine("  Administrators will need to create a package that performs a silent install using the executable file and");
+                writer.WriteLine("  add it to the task sequence separately.");
+                writer.WriteLine("__________________________________________________________________________________________________________");
+            }
+        }
+    
+
+
+
+
+
+    private void btnExtract_Click(object sender, EventArgs e)
+        {
+
+            lblStatus.Invoke((MethodInvoker)delegate {
+                lblStatus.Text = " ";
+            });
+
+
+
+
             lblValid.Text = " ";
 
             string sourceDirectory = SourceDirectory.Text;
@@ -123,6 +327,10 @@ namespace DriverPackCreator
                 worker.RunWorkerAsync();
             }
         }
+
+
+
+
 
         private bool IsValidDirectory(string directoryPath)
         {
