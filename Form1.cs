@@ -389,7 +389,7 @@ namespace DriverPackCreator
 
         private void ExtractAndOrganizeFiles(string sourceDirectory, string destinationDirectory, BackgroundWorker worker)
         {
-            string[] fileExtensions = { ".inf", ".cat", ".dat", ".sys", ".cab" };
+            string[] fileExtensions = { ".inf", ".cat", ".sys" };
 
             var files = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories)
                                  .Where(file => fileExtensions.Contains(Path.GetExtension(file).ToLower()));
